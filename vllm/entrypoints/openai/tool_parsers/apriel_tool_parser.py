@@ -59,6 +59,18 @@ class AprielToolParser(ToolParser):
             tool_calls_content = match.group(1).strip()
 
             # Check if tool call is inside a final response region
+            if "[BEGIN FINAL RESPONSE]" in model_output and "<|end|>" in model_output:
+                response_regions = [
+                    (m.start(), m.end()) for m in re.finditer(
+                        r"\[BEGIN FINAL RESPONSE\](.*?)<\|end\|>",
+                        model_output, flags=re.DOTALL
+                    )
+                ]
+                in_response = any(start > t_start and end < t_end for t_start, t_end in response_regions)
+                if not in_response:
+                    continue
+
+            # Check secondary end expression
             if "[BEGIN FINAL RESPONSE]" in model_output and "[END FINAL RESPONSE]" in model_output:
                 response_regions = [
                     (m.start(), m.end()) for m in re.finditer(

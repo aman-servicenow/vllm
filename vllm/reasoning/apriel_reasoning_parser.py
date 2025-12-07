@@ -34,18 +34,16 @@ class AprielReasoningParser(ReasoningParser):
     def __init__(self, tokenizer: PreTrainedTokenizerBase):
         super().__init__(tokenizer)
 
-        self.reasoning_end_token_ids = self.model_tokenizer.encode(
-            "[BEGIN FINAL RESPONSE]")
-
         self.think_start_expr = "Here are my reasoning steps:"
         self.think_end_expr = "[BEGIN FINAL RESPONSE]"
 
         self.response_start_expr = "[BEGIN FINAL RESPONSE]"
-        self.response_end_expr = "[END FINAL RESPONSE]"
+        self.response_end_expr = "<|end|>"
+        self.secondary_end_exp = "[END FINAL RESPONSE]"
 
         self.think_start_ids = [11745, 1584, 2036, 38528, 9578, 1058]
-        self.response_start_ids = [1091, 91264, 118106, 18113, 1080, 107284, 1093]
-        self.response_end_ids = [1091, 20378, 118106, 18113, 1080, 107284, 1093]
+        self.response_start_ids = [998]
+        self.response_end_ids = [999]
 
 
         # when state change, send out all the buffered text in last state
@@ -63,16 +61,6 @@ class AprielReasoningParser(ReasoningParser):
 
     def is_reasoning_end(self, input_ids: list[int]) -> bool:
         return self.current_state == "response"
-
-    # def is_reasoning_end(self, input_ids: list[int]) -> bool:
-    #     end_token_ids = self.reasoning_end_token_ids
-    #     assert len(end_token_ids) > 0, "reasoning_end_token_ids is empty"
-    #     # Check if the end sequence is present in the input_ids.
-    #     # We search from the end of input_ids to find the last match.
-    #     for i in range(len(input_ids) - len(end_token_ids), -1, -1):
-    #         if input_ids[i:i + len(end_token_ids)] == end_token_ids:
-    #             return True
-    #     return False
 
     def extract_content_ids(self, input_ids: list[int]) -> list[int]:
         # for hunyuan streaming reason parsing, the stream parse
@@ -97,6 +85,8 @@ class AprielReasoningParser(ReasoningParser):
         """
         start = model_output.find(self.response_start_expr)
         end = model_output.find(self.response_end_expr)
+        if end == -1:
+            end = model_output.find(self.secondary_end_exp)
 
         if start != -1:  # Found "[BEGIN FINAL RESPONSE]"
             # Everything before start is reasoning
@@ -110,7 +100,7 @@ class AprielReasoningParser(ReasoningParser):
             if end != -1 and end > start:
                 final_message = model_output[start + len(self.response_start_expr):end].strip()
             else:
-                # No [END FINAL RESPONSE] → take until end of string
+                # No <|end|> → take until end of string
                 final_message = model_output[start + len(self.response_start_expr):].strip()
 
             return reasoning_content, final_message
